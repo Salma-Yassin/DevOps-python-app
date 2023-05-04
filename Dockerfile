@@ -2,7 +2,7 @@
 FROM python:3.9-slim-buster
 
 # Set the working directory to /app
-WORKDIR /app
+WORKDIR /DevOps-Python-App
 
 # Install required packages for building Python packages
 RUN apt-get update && \
