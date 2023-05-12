@@ -18,3 +18,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Run the unit tests using Pytest
 CMD ["pytest", "test_add_numbers.py"]
+ENTRYPOINT ["python", "add_numbers.py"]
