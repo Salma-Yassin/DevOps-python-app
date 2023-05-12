@@ -1,0 +1,107 @@
+trigger:
+- main
+
+resources:
+- repo: self
+
+variables:
+  # Container registry service connection established during pipeline creation
+  dockerRegistryServiceConnection: '77f3b92a-0a3b-489f-be5f-77329ce7e7f4'
+  imageRepository: 'devopspythonapp'
+  containerRegistry: 'mycontainerregistry10.azurecr.io'
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+  azureSubscription: 'azureSubscription'
+  containerGroupName: 'devopspythonapp'
+  containerName: 'devopspythonapp'
+  tag: '$(Build.BuildId)'
+
+  # Agent VM image name
+  vmImageName: 'ubuntu-latest'
+
+stages:
+- stage: Test
+  displayName: Test stage
+  jobs:
+  - job: Test
+    displayName: Run unit tests
+    pool:
+      vmImage: $(vmImageName)
+      parallel: 1
+    steps:
+    - script: |
+        python3 -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pytest test_add_numbers.py
+      displayName: Run tests with Pytest
+      
+  - job: coverage
+    displayName: Code coverage
+    dependsOn: test
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - script: |
+        python3 -m pip install --upgrade pip
+        pip install -r requirements.txt
+        coverage run --source=. -m pytest test_add_numbers.py
+        coverage report -m
+        coverage xml
+      displayName: Run tests with Pytest and Coverage.py
+    - task: PublishCodeCoverageResults@1
+      inputs:
+        codeCoverageTool: 'cobertura'
+        summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage.xml'
+        reportDirectory: '$(System.DefaultWorkingDirectory)/coverageReport'
+      displayName: Publish code coverage results
+
+- stage: Build
+  displayName: Build and push stage
+  jobs:
+  - job: Build
+    displayName: Build and push Docker image
+    pool:
+      vmImage: $(vmImageName)
+      parallel: 1
+    steps:
+    - task: Docker@2
+      displayName: Build and push an image to container registry
+      inputs:
+        command: buildAndPush
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(tag)
+          
+    - task: AzureCLI@2
+      displayName: 'Create container group'
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az container create \
+            --resource-group myResourceGroup \
+            --name $(containerGroupName) \
+            --image $(containerRegistry)/$(imageRepository):$(tag) \
+            --cpu 1 \
+            --memory 1 \
+            --ports 80 \
+            --ip-address public \
+            --registry-login-server $(containerRegistry) \
+            --registry-username 'mycontainerRegistry10' \
+            --registry-password 'XukI3SdpRC3jxJzBtrt1tnD0IxN2p4lAMcuQv7mGp9+ACRAjE9Dt' \
+            --dns-name-label $(containerName)
+
+    - task: AzureCLI@2
+      displayName: 'Show container group details'
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az container show \
+            --resource-group myResourceGroup \
+            --name $(containerGroupName) \
+            --query "{FQDN:ipAddress.fqdn,ProvisioningState:provisioningState}" \
+            --out table
