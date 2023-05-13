@@ -54,11 +54,11 @@ stages:
         reportDirectory: '$(System.DefaultWorkingDirectory)/coverageReport'
       displayName: Publish code coverage results
 
-- stage: Build
-  displayName: Build and push stage
+- stage: Test Environment
+  displayName: Test environment stage
   jobs:
-  - job: Build
-    displayName: Build and push Docker image
+  - job: TestEnvironment
+    displayName: Deploy to test environment
     pool:
       vmImage: $(vmImageName)
       parallel: 1
@@ -71,7 +71,7 @@ stages:
         dockerfile: $(dockerfilePath)
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
-          $(tag)
+          $(tag)-test
           
     - task: AzureCLI@2
       displayName: 'Create container group'
@@ -82,8 +82,8 @@ stages:
         inlineScript: |
           az container create \
             --resource-group myResourceGroup \
-            --name $(containerGroupName) \
-            --image $(containerRegistry)/$(imageRepository):$(tag) \
+            --name $(containerGroupName)-test \
+            --image $(containerRegistry)/$(imageRepository):$(tag)-test \
             --cpu 1 \
             --memory 1 \
             --ports 5000 \
@@ -91,33 +91,72 @@ stages:
             --registry-login-server $(containerRegistry) \
             --registry-username 'mycontainerRegistry10' \
             --registry-password 'XukI3SdpRC3jxJzBtrt1tnD0IxN2p4lAMcuQv7mGp9+ACRAjE9Dt' \
-            --dns-name-label $(containerName)
+            --dns-name-label $(containerName)-test
 
+- stage: Production Approval
+  displayName: Production Approval stage
+  jobs:
+  - job: ProductionApproval
+    displayName: Approve production deployment
+    pool:
+      vmImage: $(vmImageName)
+      parallel: 1
+    steps:
+    - task: PowerShell@2
+      displayName: 'Prompt for approval'
+      inputs:
+        targetType: 'inline'
+        script: |
+          $title = "Production Deployment Approval"
+          $message = "Do you approve the deployment to the production environment?"
+          $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", "Approve the deployment"
+          $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", "Reject the deployment"
+          $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+          $result = $host.ui.PromptForChoice($title, $message, $options, 0)
+          if ($result -eq 0) {
+            Write-Host "Deployment approved."
+            exit 0
+          } else {
+            Write-Host "Deployment rejected."
+            exit 1
+          }
+
+- stage: Production
+  displayName: Production stage
+  dependsOn: Production Approval
+  jobs:
+  - job: Production
+    displayName: Deploy to production
+    pool:
+      vmImage: $(vmImageName)
+      parallel: 1
+    steps:
+    - task: Docker@2
+      displayName: Build and push an image to container registry
+      inputs:
+        command: buildAndPush
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(tag)-prod
+          
     - task: AzureCLI@2
-      displayName: 'Show container group details'
+      displayName: 'Create container group'
       inputs:
         azureSubscription: $(azureSubscription)
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          az container show \
+          az container create \
             --resource-group myResourceGroup \
-            --name $(containerGroupName) \
-            --query "{FQDN:ipAddress.fqdn,ProvisioningState:provisioningState}" \
-            --out table
-
-- stage: Acceptance
-  displayName: Acceptance stage
-  dependsOn: Build
-  jobs:
-  - job: Acceptance
-    displayName: Run acceptance tests
-    pool:
-      vmImage: $(vmImageName)
-      parallel: 1
-    steps:
-    - script: |
-        python3 -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pytest test_acceptance.py
-      displayName: Run acceptance tests with Pytest
+            --name $(containerGroupName)-prod \
+            --image $(containerRegistry)/$(imageRepository):$(tag)-prod \
+            --cpu 1 \
+            --memory 1 \
+            --ports 5000 \
+            --ip-address public \
+            --registry-login-server $(containerRegistry) \
+            --registry-username 'mycontainerRegistry10' \
+            --registry-password 'XukI3SdpRC3jxJzBtrt1tnD0IxN2p4lAMcuQv7mGp9+ACRAjE9Dt' \
+            --dns-name-label $(containerName)-prod
