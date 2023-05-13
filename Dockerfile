@@ -16,6 +16,11 @@ COPY test_add_numbers.py .
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Expose the port used by the Flask app
+EXPOSE 5000
+
 # Run the unit tests using Pytest
-CMD ["pytest", "test_add_numbers.py"]
-ENTRYPOINT ["python", "add_numbers.py"]
+RUN pytest test_add_numbers.py
+
+# Start the Flask app
+CMD ["python", "add_numbers.py"]
