@@ -86,7 +86,7 @@ stages:
             --image $(containerRegistry)/$(imageRepository):$(tag) \
             --cpu 1 \
             --memory 1 \
-            --ports 80 \
+            --ports 5000 \
             --ip-address public \
             --registry-login-server $(containerRegistry) \
             --registry-username 'mycontainerRegistry10' \
