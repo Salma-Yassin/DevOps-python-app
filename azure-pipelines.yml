@@ -54,7 +54,7 @@ stages:
         reportDirectory: '$(System.DefaultWorkingDirectory)/coverageReport'
       displayName: Publish code coverage results
 
-- stage: Test Environment
+- stage: TestEnvironment
   displayName: Test environment stage
   jobs:
   - job: TestEnvironment
@@ -93,7 +93,7 @@ stages:
             --registry-password 'XukI3SdpRC3jxJzBtrt1tnD0IxN2p4lAMcuQv7mGp9+ACRAjE9Dt' \
             --dns-name-label $(containerName)-test
 
-- stage: Production Approval
+- stage: ProductionApproval
   displayName: Production Approval stage
   jobs:
   - job: ProductionApproval
