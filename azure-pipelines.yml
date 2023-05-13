@@ -105,3 +105,19 @@ stages:
             --name $(containerGroupName) \
             --query "{FQDN:ipAddress.fqdn,ProvisioningState:provisioningState}" \
             --out table
+
+- stage: Acceptance
+  displayName: Acceptance stage
+  dependsOn: Build
+  jobs:
+  - job: Acceptance
+    displayName: Run acceptance tests
+    pool:
+      vmImage: $(vmImageName)
+      parallel: 1
+    steps:
+    - script: |
+        python3 -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pytest test_acceptance.py
+      displayName: Run acceptance tests with Pytest
